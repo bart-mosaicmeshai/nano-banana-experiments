@@ -83,6 +83,32 @@ def generate(prompt, image, output):
             click.echo("Warning: No image was generated in the response.", err=True)
             return 1
 
+        # Display usage and cost information
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            usage = response.usage_metadata
+            click.echo("\n--- Usage & Cost ---")
+
+            if hasattr(usage, 'prompt_token_count'):
+                click.echo(f"Input tokens: {usage.prompt_token_count:,}")
+                input_cost = (usage.prompt_token_count / 1_000_000) * 0.30
+                click.echo(f"Input cost: ${input_cost:.6f}")
+
+            if hasattr(usage, 'candidates_token_count'):
+                click.echo(f"Output tokens: {usage.candidates_token_count:,}")
+                # Output images are charged per image, not per token
+                # 1290 tokens = $0.039 per image
+                num_images = 1 if image_saved else 0
+                output_cost = 0.039 * num_images
+                click.echo(f"Output cost: ${output_cost:.6f} ({num_images} image)")
+
+            if hasattr(usage, 'total_token_count'):
+                click.echo(f"Total tokens: {usage.total_token_count:,}")
+
+            # Calculate total cost
+            total_cost = input_cost + output_cost
+            click.echo(f"Total cost: ${total_cost:.6f}")
+            click.echo("-------------------")
+
     except Exception as e:
         click.echo(f"Error: {str(e)}", err=True)
         return 1
