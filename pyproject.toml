@@ -1,0 +1,21 @@
+[project]
+name = "nano-banana-cli"
+version = "0.1.0"
+description = "CLI tool for exploring Google's Gemini 2.5 Flash Image (nano-banana) model"
+requires-python = ">=3.10"
+dependencies = [
+    "google-genai>=1.0.0",
+    "pillow>=10.0.0",
+    "python-dotenv>=1.0.0",
+    "click>=8.1.0",
+]
+
+[project.scripts]
+nano-banana = "nano_banana.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["nano_banana"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
