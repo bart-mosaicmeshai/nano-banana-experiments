@@ -55,11 +55,52 @@ nano-banana generate "add a strawberry to the left eye" -i input.png -o output.p
 nano-banana generate "person in different scene" -r reference1.jpg -r reference2.jpg --model 3
 ```
 
-### Get information about capabilities:
+### Get detailed information about model capabilities:
 
 ```bash
 nano-banana info
 ```
+
+This displays comprehensive information about both models including:
+- Image generation and editing capabilities
+- Resolution options
+- Pricing details
+- Tips for best results
+
+## Output Organization
+
+Generated images are automatically organized in date-based subdirectories:
+
+```
+output/
+├── 2024-11-23/
+│   ├── generated_v2_1K_20241123_143052.png
+│   └── generated_v3_2K_20241123_145321.png
+├── 2024-11-24/
+│   └── generated_v3_4K_20241124_092145.png
+└── generation_log.json
+```
+
+### Generation Logging
+
+All generations are tracked in `output/generation_log.json` with:
+- Timestamp
+- Prompt text
+- Output file path
+- Model and resolution used
+- Input/reference images (if any)
+- Cost breakdown (input, output, and total)
+
+### Image Metadata
+
+Each generated PNG file includes embedded metadata:
+- Original prompt
+- Model name and version
+- Resolution setting
+- Generation timestamp
+- Input/reference image paths (if used)
+
+You can view this metadata using image viewers or tools that read PNG metadata.
 
 ## API Key
 
