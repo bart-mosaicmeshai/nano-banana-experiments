@@ -2,18 +2,60 @@
 """CLI tool for Gemini 2.5 Flash Image (nano-banana) model."""
 
 import os
+import json
 import click
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
 from google import genai
 from PIL import Image
+from PIL.PngImagePlugin import PngInfo
 
 # Load environment variables
 load_dotenv()
 
 # Default output directory
 OUTPUT_DIR = Path("output")
+
+# Log file for generation history
+LOG_FILE = OUTPUT_DIR / "generation_log.json"
+
+
+def log_generation(prompt, output_path, model, resolution, image_path=None, reference_paths=None, cost_info=None):
+    """Log generation details to JSON file."""
+    OUTPUT_DIR.mkdir(exist_ok=True)
+
+    # Load existing log or create new one
+    log_entries = []
+    if LOG_FILE.exists():
+        try:
+            with open(LOG_FILE, 'r') as f:
+                log_entries = json.load(f)
+        except json.JSONDecodeError:
+            log_entries = []
+
+    # Create new entry
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "prompt": prompt,
+        "output_file": str(output_path),
+        "model": model,
+        "resolution": resolution,
+        "input_image": str(image_path) if image_path else None,
+        "reference_images": [str(p) for p in reference_paths] if reference_paths else [],
+    }
+
+    # Add cost information if available
+    if cost_info:
+        entry["cost"] = cost_info
+
+    log_entries.append(entry)
+
+    # Save updated log
+    with open(LOG_FILE, 'w') as f:
+        json.dump(log_entries, f, indent=2)
+
+    return entry
 
 
 @click.group()
@@ -46,8 +88,10 @@ def generate(prompt, image, reference, output, model, resolution):
         return 1
 
     try:
-        # Create output directory if it doesn't exist
-        OUTPUT_DIR.mkdir(exist_ok=True)
+        # Create date-based subdirectory
+        today = datetime.now().strftime("%Y-%m-%d")
+        date_dir = OUTPUT_DIR / today
+        date_dir.mkdir(parents=True, exist_ok=True)
 
         # Select model based on version
         if model == '3':
@@ -62,12 +106,12 @@ def generate(prompt, image, reference, output, model, resolution):
         # Generate output filename if not provided
         if output is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output = OUTPUT_DIR / f"generated_v{model}_{resolution}_{timestamp}.png"
+            output = date_dir / f"generated_v{model}_{resolution}_{timestamp}.png"
         else:
             output = Path(output)
-            # If relative path provided, save to output directory
+            # If relative path provided, save to date directory
             if not output.is_absolute():
-                output = OUTPUT_DIR / output
+                output = date_dir / output
 
         # Initialize the client
         client = genai.Client(api_key=api_key)
@@ -114,7 +158,25 @@ def generate(prompt, image, reference, output, model, resolution):
             if part.text:
                 click.echo(f"\nResponse: {part.text}")
             elif img_data := part.as_image():
+                # Save the image first
                 img_data.save(output)
+
+                # Re-open with PIL to add metadata
+                pil_image = Image.open(output)
+
+                # Create PNG metadata with prompt information
+                metadata = PngInfo()
+                metadata.add_text("prompt", prompt)
+                metadata.add_text("model", model_name)
+                metadata.add_text("resolution", resolution)
+                metadata.add_text("timestamp", datetime.now().isoformat())
+                if image:
+                    metadata.add_text("input_image", str(image))
+                if reference:
+                    metadata.add_text("reference_images", ", ".join(str(r) for r in reference))
+
+                # Save again with metadata
+                pil_image.save(output, pnginfo=metadata)
                 click.echo(f"\nImage saved to: {output}")
                 image_saved = True
 
@@ -171,6 +233,19 @@ def generate(prompt, image, reference, output, model, resolution):
             total_cost = input_cost + output_cost
             click.echo(f"Total cost: ${total_cost:.6f}")
             click.echo("-------------------")
+
+            # Log generation to JSON file
+            cost_info = {
+                "input_cost": input_cost,
+                "output_cost": output_cost,
+                "total_cost": total_cost,
+                "input_tokens": usage.prompt_token_count if hasattr(usage, 'prompt_token_count') else None,
+                "output_tokens": usage.candidates_token_count if hasattr(usage, 'candidates_token_count') else None,
+            }
+            log_generation(prompt, output, model_name, resolution, image, reference, cost_info)
+        else:
+            # Log even without cost information
+            log_generation(prompt, output, model_name, resolution, image, reference)
 
     except Exception as e:
         click.echo(f"Error: {str(e)}", err=True)
