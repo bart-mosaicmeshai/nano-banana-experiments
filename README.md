@@ -14,11 +14,20 @@ Exploring Google's Gemini 2.5 Flash Image (nano-banana) model - a state-of-the-a
 
 1. Clone the repository
 2. Copy `.env.example` to `.env` and add your Gemini API key
-3. Install dependencies:
+3. Create and activate virtual environment:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+4. Install dependencies:
 
 ```bash
 pip install -e .
 ```
+
+**Note:** You'll need to activate the virtual environment (`source venv/bin/activate`) each time you open a new terminal session.
 
 ## Usage
 
