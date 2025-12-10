@@ -72,7 +72,8 @@ def main():
 @click.option('--output', '-o', default=None, help='Output filename (default: auto-generated with timestamp in output/)')
 @click.option('--model', '-m', type=click.Choice(['2', '3'], case_sensitive=False), default='2', help='Model version: 2 (nano-banana-2) or 3 (nano-banana-3 Pro)')
 @click.option('--resolution', type=click.Choice(['1K', '2K', '4K'], case_sensitive=False), default='1K', help='Output resolution (only for model 3)')
-def generate(prompt, image, reference, output, model, resolution):
+@click.option('--quality', '-q', type=int, default=85, help='JPEG quality (1-100, default: 85, only applies to JPEG output)')
+def generate(prompt, image, reference, output, model, resolution, quality):
     """Generate or edit an image based on a text prompt.
 
     Examples:
@@ -80,6 +81,7 @@ def generate(prompt, image, reference, output, model, resolution):
         nano-banana generate "add a strawberry to the left eye" -i input.png -o output.png
         nano-banana generate "create a menu for a coffee shop" --model 3 --resolution 2K
         nano-banana generate "person in different scene" -r reference1.jpg -r reference2.jpg --model 3
+        nano-banana generate "blog header image" --output ~/Projects/blog/assets/header.jpg --quality 90
     """
     api_key = os.getenv('GEMINI_API_KEY')
     if not api_key:
@@ -88,11 +90,6 @@ def generate(prompt, image, reference, output, model, resolution):
         return 1
 
     try:
-        # Create date-based subdirectory
-        today = datetime.now().strftime("%Y-%m-%d")
-        date_dir = OUTPUT_DIR / today
-        date_dir.mkdir(parents=True, exist_ok=True)
-
         # Select model based on version
         if model == '3':
             model_name = "gemini-3-pro-image-preview"
@@ -103,15 +100,34 @@ def generate(prompt, image, reference, output, model, resolution):
                 click.echo("Warning: Resolution option ignored for model 2 (always outputs at default resolution)")
             click.echo("Using Nano Banana 2")
 
-        # Generate output filename if not provided
+        # Handle output path
+        use_date_dir = False
         if output is None:
+            # Auto-generated filename: use date-based subdirectory
+            use_date_dir = True
+            today = datetime.now().strftime("%Y-%m-%d")
+            date_dir = OUTPUT_DIR / today
+            date_dir.mkdir(parents=True, exist_ok=True)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output = date_dir / f"generated_v{model}_{resolution}_{timestamp}.png"
         else:
-            output = Path(output)
+            # User-specified output path
+            output = Path(output).expanduser()  # Expand ~ to home directory
+
             # If relative path provided, save to date directory
             if not output.is_absolute():
+                use_date_dir = True
+                today = datetime.now().strftime("%Y-%m-%d")
+                date_dir = OUTPUT_DIR / today
+                date_dir.mkdir(parents=True, exist_ok=True)
                 output = date_dir / output
+            else:
+                # Absolute path: create parent directories if needed
+                output.parent.mkdir(parents=True, exist_ok=True)
+
+        # Determine output format based on extension
+        output_format = output.suffix.lower()
+        is_jpeg = output_format in ['.jpg', '.jpeg']
 
         # Initialize the client
         client = genai.Client(api_key=api_key)
@@ -158,26 +174,68 @@ def generate(prompt, image, reference, output, model, resolution):
             if part.text:
                 click.echo(f"\nResponse: {part.text}")
             elif img_data := part.as_image():
-                # Save the image first
-                img_data.save(output)
-
-                # Re-open with PIL to add metadata
-                pil_image = Image.open(output)
-
-                # Create PNG metadata with prompt information
-                metadata = PngInfo()
-                metadata.add_text("prompt", prompt)
-                metadata.add_text("model", model_name)
-                metadata.add_text("resolution", resolution)
-                metadata.add_text("timestamp", datetime.now().isoformat())
+                # Prepare metadata
+                timestamp_str = datetime.now().isoformat()
+                metadata_dict = {
+                    "prompt": prompt,
+                    "model": model_name,
+                    "resolution": resolution,
+                    "timestamp": timestamp_str,
+                }
                 if image:
-                    metadata.add_text("input_image", str(image))
+                    metadata_dict["input_image"] = str(image)
                 if reference:
-                    metadata.add_text("reference_images", ", ".join(str(r) for r in reference))
+                    metadata_dict["reference_images"] = ", ".join(str(r) for r in reference)
 
-                # Save again with metadata
-                pil_image.save(output, pnginfo=metadata)
-                click.echo(f"\nImage saved to: {output}")
+                if is_jpeg:
+                    # For JPEG output, save as temp PNG first, then convert
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+                        tmp_path = tmp.name
+
+                    # Save the image from API as PNG
+                    img_data.save(tmp_path)
+
+                    # Re-open with PIL to convert to JPEG
+                    pil_image = Image.open(tmp_path)
+
+                    # Convert RGBA to RGB if needed (JPEG doesn't support alpha)
+                    if pil_image.mode in ('RGBA', 'LA', 'P'):
+                        # Create white background
+                        background = Image.new('RGB', pil_image.size, (255, 255, 255))
+                        if pil_image.mode == 'P':
+                            pil_image = pil_image.convert('RGBA')
+                        background.paste(pil_image, mask=pil_image.split()[-1] if pil_image.mode in ('RGBA', 'LA') else None)
+                        pil_image = background
+                    elif pil_image.mode != 'RGB':
+                        pil_image = pil_image.convert('RGB')
+
+                    # Save as JPEG with metadata in comment
+                    metadata_json = json.dumps(metadata_dict)
+                    pil_image.save(output, format='JPEG', quality=quality, optimize=True,
+                                 comment=metadata_json)
+
+                    # Clean up temp file
+                    Path(tmp_path).unlink()
+
+                    click.echo(f"\nJPEG image saved to: {output} (quality: {quality})")
+                else:
+                    # Save as PNG with metadata
+                    # Save the image first
+                    img_data.save(output)
+
+                    # Re-open with PIL to add metadata
+                    pil_image = Image.open(output)
+
+                    # Create PNG metadata with prompt information
+                    png_metadata = PngInfo()
+                    for key, value in metadata_dict.items():
+                        png_metadata.add_text(key, value)
+
+                    # Save again with metadata
+                    pil_image.save(output, pnginfo=png_metadata)
+                    click.echo(f"\nPNG image saved to: {output}")
+
                 image_saved = True
 
         if not image_saved:

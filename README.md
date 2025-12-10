@@ -55,6 +55,18 @@ nano-banana generate "add a strawberry to the left eye" -i input.png -o output.p
 nano-banana generate "person in different scene" -r reference1.jpg -r reference2.jpg --model 3
 ```
 
+### Generate JPEG output with custom path:
+
+```bash
+nano-banana generate "blog header image" --output ~/Projects/blog/assets/header.jpg --model 3 --resolution 2K
+```
+
+### Control JPEG quality (1-100, default: 85):
+
+```bash
+nano-banana generate "optimized web image" --output image.jpg --quality 90 --model 3
+```
+
 ### Get detailed information about model capabilities:
 
 ```bash
@@ -69,7 +81,9 @@ This displays comprehensive information about both models including:
 
 ## Output Organization
 
-Generated images are automatically organized in date-based subdirectories:
+### Auto-generated Filenames
+
+When no `--output` is specified, images are automatically organized in date-based subdirectories:
 
 ```
 output/
@@ -80,6 +94,21 @@ output/
 │   └── generated_v3_4K_20241124_092145.png
 └── generation_log.json
 ```
+
+### Custom Output Paths
+
+When using `--output`, you can specify:
+- **Absolute paths**: `--output ~/Projects/blog/assets/image.jpg` (saves directly to specified location)
+- **Relative paths**: `--output my-image.png` (saves to date-based subdirectory)
+- **JPEG format**: Automatically converts to JPEG when path ends with `.jpg` or `.jpeg`
+- **PNG format**: Saves as PNG when path ends with `.png` or for auto-generated names
+
+The tool automatically:
+- Expands `~` to your home directory
+- Creates parent directories if they don't exist
+- Converts RGBA to RGB for JPEG compatibility
+
+**Note:** JPEG conversion happens locally on your machine after the API call, so there's no additional cost for JPEG output. The API pricing is the same whether you save as PNG or JPEG.
 
 ### Generation Logging
 
@@ -93,14 +122,20 @@ All generations are tracked in `output/generation_log.json` with:
 
 ### Image Metadata
 
-Each generated PNG file includes embedded metadata:
+Generated images include embedded metadata:
+
+**PNG files** (in PNG info fields):
 - Original prompt
 - Model name and version
 - Resolution setting
 - Generation timestamp
 - Input/reference image paths (if used)
 
-You can view this metadata using image viewers or tools that read PNG metadata.
+**JPEG files** (in JPEG comment field as JSON):
+- Same metadata as PNG, stored in JSON format
+- Optimized for web with configurable quality setting
+
+You can view PNG metadata using image viewers or tools that read PNG metadata. JPEG metadata can be extracted using tools like `exiftool` or by reading the JPEG comment field.
 
 ## API Key
 
