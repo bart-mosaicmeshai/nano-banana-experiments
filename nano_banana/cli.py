@@ -70,7 +70,7 @@ def main():
 @click.option('--image', '-i', type=click.Path(exists=True), help='Input image for editing/composition')
 @click.option('--reference', '-r', multiple=True, type=click.Path(exists=True), help='Reference images for consistency (can be used multiple times)')
 @click.option('--output', '-o', default=None, help='Output filename (default: auto-generated with timestamp in output/)')
-@click.option('--model', '-m', type=click.Choice(['2', '3'], case_sensitive=False), default='2', help='Model version: 2 (nano-banana-2) or 3 (nano-banana-3 Pro)')
+@click.option('--model', '-m', type=click.Choice(['2', '3', '3.1'], case_sensitive=False), default='2', help='Model: 2 (Gemini 2.5 Flash Image), 3.1 (Gemini 3.1 Flash Image), or 3 (Gemini 3 Pro Image)')
 @click.option('--resolution', type=click.Choice(['1K', '2K', '4K'], case_sensitive=False), default='1K', help='Output resolution (only for model 3)')
 @click.option('--quality', '-q', type=int, default=85, help='JPEG quality (1-100, default: 85, only applies to JPEG output)')
 def generate(prompt, image, reference, output, model, resolution, quality):
@@ -90,15 +90,18 @@ def generate(prompt, image, reference, output, model, resolution, quality):
         return 1
 
     try:
-        # Select model based on version
+        # Select model based on version (GA model IDs as of 2026)
         if model == '3':
-            model_name = "gemini-3-pro-image-preview"
-            click.echo(f"Using Nano Banana 3 Pro (resolution: {resolution})")
+            model_name = "gemini-3-pro-image"
+            click.echo(f"Using Gemini 3 Pro Image / Nano Banana Pro (resolution: {resolution})")
+        elif model == '3.1':
+            model_name = "gemini-3.1-flash-image"
+            click.echo(f"Using Gemini 3.1 Flash Image / Nano Banana 2 (resolution: {resolution})")
         else:
-            model_name = "gemini-2.5-flash-image-preview"
+            model_name = "gemini-2.5-flash-image"
             if resolution != '1K':
                 click.echo("Warning: Resolution option ignored for model 2 (always outputs at default resolution)")
-            click.echo("Using Nano Banana 2")
+            click.echo("Using Gemini 2.5 Flash Image / Nano Banana")
 
         # Handle output path
         use_date_dir = False
@@ -150,9 +153,9 @@ def generate(prompt, image, reference, output, model, resolution, quality):
 
         click.echo(f"Generating image with prompt: {prompt}")
 
-        # Prepare generation config for model 3
+        # Prepare generation config for model 3 / 3.1
         config = {}
-        if model == '3':
+        if model in ('3', '3.1'):
             # Map resolution to generation config
             resolution_map = {
                 '1K': {'response_modalities': ['IMAGE']},
@@ -255,8 +258,8 @@ def generate(prompt, image, reference, output, model, resolution, quality):
                 click.echo(f"Input tokens: {usage.prompt_token_count:,}")
 
                 # Calculate input cost based on model
-                if model == '3':
-                    # Model 3: $0.0011 per image input
+                if model in ('3', '3.1'):
+                    # Model 3 / 3.1: ~$0.0011 per input image
                     num_input_images = len(reference) + (1 if image else 0)
                     input_cost = num_input_images * 0.0011
                     if num_input_images > 0:
@@ -273,14 +276,16 @@ def generate(prompt, image, reference, output, model, resolution, quality):
                 # Calculate output cost based on model and resolution
                 num_images = 1 if image_saved else 0
                 if model == '3':
-                    # Model 3 pricing
-                    if resolution == '4K':
-                        output_cost = 0.24 * num_images
-                    else:  # 1K or 2K
-                        output_cost = 0.134 * num_images
+                    # Gemini 3 Pro Image: $0.134 (1K/2K), $0.24 (4K)
+                    output_cost = (0.24 if resolution == '4K' else 0.134) * num_images
+                    click.echo(f"Output cost: ${output_cost:.6f} ({num_images} image @ {resolution})")
+                elif model == '3.1':
+                    # Gemini 3.1 Flash Image: 0.5K $0.045, 1K $0.067, 2K $0.101, 4K $0.151
+                    flash31_pricing = {'0.5K': 0.045, '1K': 0.067, '2K': 0.101, '4K': 0.151}
+                    output_cost = flash31_pricing.get(resolution, 0.067) * num_images
                     click.echo(f"Output cost: ${output_cost:.6f} ({num_images} image @ {resolution})")
                 else:
-                    # Model 2: $0.039 per image (1290 tokens)
+                    # Gemini 2.5 Flash Image: $0.039 per image (1290 tokens)
                     output_cost = 0.039 * num_images
                     click.echo(f"Output cost: ${output_cost:.6f} ({num_images} image)")
 
@@ -317,7 +322,7 @@ def info():
 Nano Banana Models:
 
 ═══════════════════════════════════════════════════════════════════════════
-MODEL 2: Gemini 2.5 Flash Image (gemini-2.5-flash-image-preview)
+MODEL 2: Gemini 2.5 Flash Image (gemini-2.5-flash-image)
 ═══════════════════════════════════════════════════════════════════════════
 
 🎨 IMAGE GENERATION
@@ -343,7 +348,19 @@ MODEL 2: Gemini 2.5 Flash Image (gemini-2.5-flash-image-preview)
    - Output: $0.039 per image (1,290 tokens)
 
 ═══════════════════════════════════════════════════════════════════════════
-MODEL 3: Gemini 3 Pro Image (gemini-3-pro-image-preview)
+MODEL 3.1: Gemini 3.1 Flash Image (gemini-3.1-flash-image)  [Nano Banana 2]
+═══════════════════════════════════════════════════════════════════════════
+
+🍌 NEWER FLASH MODEL (released Feb 2026):
+   - Improved quality and character consistency over Model 2
+   - Resolutions: 0.5K, 1K, 2K, 4K
+   - Good balance of quality and cost between Model 2 and Model 3
+
+💰 PRICING:
+   - Output: $0.045 (0.5K), $0.067 (1K), $0.101 (2K), $0.151 (4K)
+
+═══════════════════════════════════════════════════════════════════════════
+MODEL 3: Gemini 3 Pro Image (gemini-3-pro-image)
 ═══════════════════════════════════════════════════════════════════════════
 
 ✨ NEW CAPABILITIES:

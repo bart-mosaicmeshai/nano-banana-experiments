@@ -43,6 +43,12 @@ nano-banana generate "a raccoon holding a sign that says I love trash"
 nano-banana generate "create a menu for a coffee shop" --model 3 --resolution 2K
 ```
 
+### Generate with Model 3.1 (Nano Banana 2, quality/cost balance):
+
+```bash
+nano-banana generate "a cozy reading nook illustration" --model 3.1 --resolution 1K
+```
+
 ### Edit an existing image:
 
 ```bash
@@ -73,7 +79,7 @@ nano-banana generate "optimized web image" --output image.jpg --quality 90 --mod
 nano-banana info
 ```
 
-This displays comprehensive information about both models including:
+This displays comprehensive information about all available models including:
 - Image generation and editing capabilities
 - Resolution options
 - Pricing details
@@ -143,15 +149,24 @@ Get your free API key from [Google AI Studio](https://aistudio.google.com/)
 
 ## Model Details
 
-### Model 2 (default): gemini-2.5-flash-image-preview
+> Model IDs updated to the GA (non-preview) releases as of 2026. The older
+> `-preview` IDs are deprecated.
+
+### Model 2 (default): `gemini-2.5-flash-image`
 - **Type**: Autoregressive (not diffusion-based)
 - **Tokens per image**: 1,290
 - **Key advantage**: Exceptional prompt adherence and editing capabilities
 - **Pricing**: $0.039 per image
 
-### Model 3: gemini-3-pro-image-preview
-- **New capabilities**: Higher resolutions (1K/2K/4K), legible text rendering, multi-reference images
-- **Use cases**: Infographics, menus, diagrams, charts, multi-character scenes
+### Model 3.1: `gemini-3.1-flash-image` (Nano Banana 2, released Feb 2026)
+- **New flash model**: improved quality and character consistency over Model 2
+- **Resolutions**: 0.5K / 1K / 2K / 4K
+- **Pricing**: $0.045 (0.5K), $0.067 (1K), $0.101 (2K), $0.151 (4K) per image
+- **Use it for**: a quality/cost balance between Model 2 and Model 3
+
+### Model 3: `gemini-3-pro-image` (Nano Banana Pro)
+- **Capabilities**: Higher resolutions (1K/2K/4K), legible text rendering, multi-reference images, strongest character consistency
+- **Use cases**: Infographics, menus, diagrams, charts, multi-character scenes, consistent character sets
 - **Pricing**: $0.134 per image (1K/2K) or $0.24 per image (4K)
 - **Security**: Includes imperceptible SynthID watermark
 
